@@ -6,12 +6,20 @@
 //
 
 import SwiftUI
+import FirebaseCore
 
 @main
 struct MyBuddyApp: App {
+
+    // Inicializa Firebase al arrancar la app antes de que se cree la primera vista
+    init() {
+        FirebaseApp.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            // RootView decide entre splash, login y la app según el estado de auth
+            RootView()
         }
     }
 }

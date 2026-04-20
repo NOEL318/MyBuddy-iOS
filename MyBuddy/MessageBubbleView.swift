@@ -3,8 +3,9 @@ import SwiftUI
 struct MessageBubbleView: View {
     let message: Message
 
+    // Color de fondo según remitente: verde propio, blanco ajeno
     private var bubbleColor: Color {
-        message.isFromMe ? Color(red: 0.85, green: 0.99, blue: 0.82) : .white
+        message.isFromMe ? Color.ownBubble : .white
     }
 
     // Compone la burbuja alineada a la derecha si es enviada, a la izquierda si es recibida
@@ -21,10 +22,21 @@ struct MessageBubbleView: View {
                     }
                 }
 
-                Text(message.formattedTime)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
+                // Fila de hora + indicador de estado de Firestore
+                HStack(spacing: 4) {
+                    Text(message.formattedTime)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    // Indicador: reloj gris = pendiente, check verde = confirmado en Firestore
+                    if message.isFromMe {
+                        Image(systemName: message.isConfirmed ? "checkmark" : "clock")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(message.isConfirmed ? Color.actionGreen : .secondary)
+                            .animation(.easeInOut(duration: 0.2), value: message.isConfirmed)
+                    }
+                }
+                .padding(.horizontal, 4)
             }
 
             if !message.isFromMe { Spacer(minLength: 60) }
@@ -73,13 +85,15 @@ struct MessageBubbleView: View {
     }
 }
 
+// MARK: - BubbleShape
+
 struct BubbleShape: Shape {
 
     let isFromMe: Bool
 
     // Dibuja la forma de la burbuja con una cola en la esquina inferior según el remitente
     func path(in rect: CGRect) -> Path {
-        let radius: CGFloat = 16
+        let radius:   CGFloat = 16
         let tailSize: CGFloat = 7
 
         var path = Path()
@@ -125,10 +139,10 @@ struct BubbleShape: Shape {
 
 #Preview {
     VStack(spacing: 8) {
-        MessageBubbleView(message: Message(type: .text, sender: .ios, content: "Hola! Cómo estás?"))
+        MessageBubbleView(message: Message(type: .text, sender: .ios, content: "Hola! Cómo estás?", isConfirmed: true))
         MessageBubbleView(message: Message(type: .text, sender: .web, content: "Todo bien gracias, y tú?"))
-        MessageBubbleView(message: Message(type: .text, sender: .ios, content: "Excelente! Mira esta foto"))
+        MessageBubbleView(message: Message(type: .text, sender: .ios, content: "Enviando…", isConfirmed: false))
     }
     .padding()
-    .background(Color(red: 0.94, green: 0.92, blue: 0.87))
+    .background(Color.chatBg)
 }
