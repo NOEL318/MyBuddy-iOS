@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import FirebaseAuth
 
 // Observa el estado de autenticación de Firebase y lo expone a toda la app

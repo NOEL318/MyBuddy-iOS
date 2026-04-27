@@ -1,18 +1,22 @@
 import SwiftUI
+import FirebaseAuth
 
-struct DirectoryView: View {
+/// Lista de contactos disponibles para iniciar una conversación de chat
+struct ChatsListView: View {
 
+    @EnvironmentObject var authVM: AuthViewModel
     @State private var users:      [UserProfile] = []
-    @State private var searchText: String = ""
     @State private var isLoading:  Bool = true
+    @State private var searchText: String = ""
     @State private var appeared:   Bool = false
 
-    // Filtra usuarios según el texto de búsqueda
+    // Filtra usuarios según el texto de búsqueda, excluyendo al usuario actual
     private var filteredUsers: [UserProfile] {
-        guard !searchText.isEmpty else { return users }
-        return users.filter {
+        let others = users.filter { $0.id != authVM.user?.uid }
+        guard !searchText.isEmpty else { return others }
+        return others.filter {
             $0.username.localizedCaseInsensitiveContains(searchText) ||
-            $0.description.localizedCaseInsensitiveContains(searchText)
+            $0.email.localizedCaseInsensitiveContains(searchText)
         }
     }
 
@@ -27,13 +31,13 @@ struct DirectoryView: View {
                 } else if filteredUsers.isEmpty {
                     emptyState
                 } else {
-                    userList
+                    contactList
                 }
             }
             .colorScheme(.light)
-            .navigationTitle("Directorio")
+            .navigationTitle("Chats")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "Buscar usuario o descripción")
+            .searchable(text: $searchText, prompt: "Buscar por nombre o email")
             .task { await loadUsers() }
             .refreshable { await loadUsers() }
             .toolbarBackground(
@@ -46,15 +50,20 @@ struct DirectoryView: View {
             )
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            .navigationDestination(for: UserProfile.self) { user in
+                if let uid = authVM.user?.uid {
+                    ContentView(recipient: user, currentUid: uid)
+                }
+            }
         }
     }
 
-    // Lista de usuarios con entrada escalonada y navegación a detalle de contacto
-    private var userList: some View {
+    // Lista de contactos con entrada escalonada y navegación al chat
+    private var contactList: some View {
         List {
             ForEach(Array(filteredUsers.enumerated()), id: \.element.id) { index, user in
-                NavigationLink(destination: ContactDetailView(user: user)) {
-                    userRow(user, index: index)
+                NavigationLink(value: user) {
+                    contactRow(user, index: index)
                 }
                 .listRowBackground(Color.white)
                 .listRowSeparatorTint(Color.gray.opacity(0.18))
@@ -66,8 +75,8 @@ struct DirectoryView: View {
         }
     }
 
-    // Fila individual estilo WhatsApp
-    private func userRow(_ user: UserProfile, index: Int) -> some View {
+    // Fila individual de contacto estilo WhatsApp
+    private func contactRow(_ user: UserProfile, index: Int) -> some View {
         HStack(spacing: 14) {
             // Avatar con inicial del username
             Circle()
@@ -83,12 +92,10 @@ struct DirectoryView: View {
                 Text(user.username)
                     .font(.system(.body, design: .rounded, weight: .medium))
                     .foregroundStyle(Color(uiColor: .label))
-                if !user.description.isEmpty {
-                    Text(user.description)
-                        .font(.subheadline)
-                        .foregroundStyle(Color(uiColor: .secondaryLabel))
-                        .lineLimit(1)
-                }
+                Text(user.email)
+                    .font(.subheadline)
+                    .foregroundStyle(Color(uiColor: .secondaryLabel))
+                    .lineLimit(1)
             }
             Spacer()
         }
@@ -101,14 +108,14 @@ struct DirectoryView: View {
         )
     }
 
-    // Vista de estado vacío cuando no hay resultados
+    // Vista de estado vacío cuando no hay contactos o resultados
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "person.2.slash")
+            Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
             Text(searchText.isEmpty
-                 ? "No hay usuarios registrados"
+                 ? "No hay contactos disponibles"
                  : "Sin resultados para «\(searchText)»")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -117,14 +124,14 @@ struct DirectoryView: View {
         .padding(40)
     }
 
-    // Carga todos los usuarios desde Firestore
+    // Carga todos los usuarios registrados desde Firestore
     private func loadUsers() async {
         isLoading = true
         appeared  = false
         do {
             users = try await FirestoreService.shared.fetchAllUsers()
         } catch {
-            print("[Directory] Error al cargar usuarios: \(error)")
+            print("[ChatsListView] Error al cargar usuarios: \(error)")
         }
         isLoading = false
     }

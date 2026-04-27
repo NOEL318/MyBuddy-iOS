@@ -1,76 +1,143 @@
 import SwiftUI
 import UIKit
+import Combine
 import FirebaseAuth
+import FirebaseFirestore
 
 @MainActor
 class ChatViewModel: ObservableObject {
 
-    @Published var messages:       [Message] = []
-    @Published var connectionState: WebSocketManager.ConnectionState = .disconnected
-    /// true mientras se carga una página anterior de mensajes
-    @Published var isLoadingMore:  Bool = false
-    /// false cuando Firestore ya devolvió todos los mensajes históricos
-    @Published var hasMoreMessages: Bool = true
+    @Published var messages:          [Message] = []
+    @Published var connectionState:   WebSocketManager.ConnectionState = .disconnected
+    @Published var isLoadingMore:     Bool = false
+    @Published var hasMoreMessages:   Bool = false
+    /// true cuando el destinatario está escribiendo
+    @Published var recipientIsTyping: Bool = false
+
+    let recipient: UserProfile
+    private let currentUid: String
+    private let convId: String
 
     private let wsManager = WebSocketManager()
-    /// Cursor opaco para paginación; almacenado como Any? para no importar FirebaseFirestore aquí
-    private var paginationCursor: Any? = nil
+    private var messagesListener:  (any ListenerRegistration)? = nil
+    private var typingHideTask:    Task<Void, Never>?          = nil
+    private var lastTypingSent:    Date                        = .distantPast
+    private var paginationCursor:  QueryDocumentSnapshot?      = nil
+    /// Timestamp del mensaje más reciente ya cargado; el listener sólo entrega mensajes posteriores
+    private var listenerTimestamp: Double                      = 0
 
-    // Configura los callbacks del WebSocketManager y carga los mensajes históricos de Firestore
-    init() {
+    init(recipient: UserProfile, currentUid: String) {
+        self.recipient  = recipient
+        self.currentUid = currentUid
+        self.convId     = FirestoreService.conversationId(myUid: currentUid, recipientUid: recipient.id)
+
         wsManager.onStateChange = { [weak self] state in
             self?.connectionState = state
         }
-        wsManager.onMessage = { [weak self] incoming in
-            self?.handleIncoming(incoming)
+        // Solo usamos WebSocket para el indicador de escritura
+        wsManager.onTyping = { [weak self] in
+            self?.showTypingIndicator()
         }
+
         Task { await loadInitialMessages() }
     }
 
-    // Inicia la conexión WebSocket al servidor
+    // MARK: - Conexión
+
+    /// Inicia la conexión WebSocket (para typing) y el listener de Firestore (para mensajes)
     func connect() {
-        wsManager.connect()
+        wsManager.connect(userId: currentUid, recipientId: recipient.id)
     }
 
-    // Cierra la conexión WebSocket
+    /// Cancela la conexión WebSocket y el listener de Firestore
     func disconnect() {
         wsManager.disconnect()
+        messagesListener?.remove()
+        messagesListener = nil
+        typingHideTask?.cancel()
     }
 
-    // Agrega el mensaje de texto localmente, lo envía por WebSocket y lo persiste en Firestore
+    // MARK: - Envío de mensajes
+
+    /// Persiste el mensaje en Firestore; el listener lo añade a la UI automáticamente
     func sendText(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let msg = Message(type: .text, sender: .ios, content: trimmed)
-        messages.append(msg)
-        wsManager.sendText(trimmed)
-        Task { await persistAndConfirm(msg) }
+        let msg = Message(
+            type:      .text,
+            sender:    currentUid,
+            recipient: recipient.id,
+            content:   trimmed,
+            isFromMe:  true
+        )
+        Task { await persist(msg) }
     }
 
-    // Comprime la imagen a JPEG, la agrega localmente, la envía por WebSocket y la persiste en Firestore
+    /// Redimensiona, comprime y persiste la imagen en Firestore.
+    /// Firestore tiene un límite de 1 MB por documento; el base64 añade ~33% de overhead,
+    /// por lo que el JPEG bruto debe quedar bajo 700 KB para garantizar la escritura.
     func sendImage(_ image: UIImage) {
-        guard let data = image.jpegData(compressionQuality: 0.7) else { return }
-        let base64 = data.base64EncodedString()
-        let msg = Message(type: .image, sender: .ios, content: base64, mimeType: "image/jpeg")
-        messages.append(msg)
-        wsManager.sendImage(base64: base64, mimeType: "image/jpeg")
-        Task { await persistAndConfirm(msg) }
+        // 1. Redimensionar al lado más largo en 800 px como máximo
+        let maxDimension: CGFloat = 800
+        let scale = min(maxDimension / max(image.size.width, image.size.height), 1.0)
+        let targetSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let resized = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+
+        // 2. Comprimir con calidad decreciente hasta caber en 700 KB
+        var quality: CGFloat = 0.65
+        var data: Data?
+        repeat {
+            data = resized.jpegData(compressionQuality: quality)
+            quality -= 0.15
+        } while (data?.count ?? 0) > 700_000 && quality > 0.0
+
+        guard let finalData = data, finalData.count <= 700_000 else { return }
+
+        let base64 = finalData.base64EncodedString()
+        let msg = Message(
+            type:      .image,
+            sender:    currentUid,
+            recipient: recipient.id,
+            content:   base64,
+            mimeType:  "image/jpeg",
+            isFromMe:  true
+        )
+        Task { await persist(msg) }
     }
 
-    // Carga la página anterior de mensajes desde Firestore (llamado al hacer scroll al inicio)
+    // MARK: - Typing indicator
+
+    /// Envía un evento de "escribiendo" via WebSocket (máximo 1 vez cada 1.5 s)
+    func userDidType() {
+        let now = Date()
+        guard now.timeIntervalSince(lastTypingSent) > 1.5 else { return }
+        lastTypingSent = now
+        wsManager.sendTyping()
+    }
+
+    // MARK: - Paginación
+
+    /// Carga la página anterior de mensajes (llamado al hacer scroll al inicio)
     func loadMoreMessages() async {
-        guard !isLoadingMore, hasMoreMessages,
-              let uid = Auth.auth().currentUser?.uid else { return }
+        guard !isLoadingMore, hasMoreMessages else { return }
         isLoadingMore = true
         do {
-            let (older, cursor) = try await FirestoreService.shared.fetchMessages(
-                uid: uid, limit: 50, before: paginationCursor
+            let (older, olderCursor) = try await FirestoreService.shared.fetchMessages(
+                convId: convId, currentUid: currentUid, limit: 50, before: paginationCursor
             )
             if older.isEmpty {
                 hasMoreMessages = false
             } else {
-                messages = older + messages
-                if cursor != nil { paginationCursor = cursor }
+                let existingIds = Set(messages.compactMap { $0.firestoreId })
+                let dedupedOlder = older.filter { msg in
+                    guard let fid = msg.firestoreId else { return true }
+                    return !existingIds.contains(fid)
+                }
+                messages = dedupedOlder + messages
+                if let c = olderCursor { paginationCursor = c }
                 if older.count < 50 { hasMoreMessages = false }
             }
         } catch {
@@ -79,48 +146,68 @@ class ChatViewModel: ObservableObject {
         isLoadingMore = false
     }
 
-    // Carga los 50 mensajes más recientes desde Firestore al inicializar el ViewModel
+    // MARK: - Privados
+
+    /// Carga el historial inicial y arranca el listener para mensajes nuevos en tiempo real
     private func loadInitialMessages() async {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
         do {
-            let (loaded, cursor) = try await FirestoreService.shared.fetchMessages(uid: uid, limit: 50)
-            messages        = loaded
-            paginationCursor = cursor
-            hasMoreMessages  = loaded.count == 50
+            let (loaded, pagCursor) = try await FirestoreService.shared.fetchMessages(
+                convId: convId, currentUid: currentUid, limit: 50
+            )
+            messages          = loaded
+            paginationCursor  = pagCursor
+            listenerTimestamp = loaded.last?.timestamp ?? 0
+            hasMoreMessages   = loaded.count == 50
+            startRealtimeListener()
         } catch {
             print("[Firestore] Error cargando mensajes iniciales: \(error)")
+            startRealtimeListener()
         }
     }
 
-    // Convierte un mensaje entrante del servidor en un Message, lo agrega y lo persiste en Firestore
-    private func handleIncoming(_ incoming: IncomingMessage) {
-        guard incoming.type == .text || incoming.type == .image,
-              let sender  = incoming.sender,
-              let content = incoming.content else { return }
-
-        let msg = Message(
-            type:      incoming.type,
-            sender:    sender,
-            content:   content,
-            mimeType:  incoming.mimeType,
-            timestamp: incoming.timestamp ?? Date().timeIntervalSince1970 * 1000
-        )
-        messages.append(msg)
-        Task { await persistAndConfirm(msg) }
+    /// Registra el listener de Firestore filtrando por timestamp para no re-entregar historial
+    private func startRealtimeListener() {
+        messagesListener = FirestoreService.shared.listenToNewMessages(
+            convId:         convId,
+            currentUid:     currentUid,
+            afterTimestamp: listenerTimestamp
+        ) { [weak self] newMsgs in
+            Task { @MainActor [weak self] in
+                self?.applyIncomingMessages(newMsgs)
+            }
+        }
     }
 
-    // Persiste el mensaje en Firestore y actualiza su indicador de confirmación en la UI
-    private func persistAndConfirm(_ msg: Message) async {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
+    /// Integra los mensajes recibidos del listener, evitando duplicados por firestoreId
+    private func applyIncomingMessages(_ incoming: [Message]) {
+        var changed = false
+        for msg in incoming {
+            guard let fid = msg.firestoreId,
+                  !messages.contains(where: { $0.firestoreId == fid }) else { continue }
+            messages.append(msg)
+            changed = true
+        }
+        if changed {
+            messages.sort { $0.timestamp < $1.timestamp }
+        }
+    }
+
+    /// Persiste el mensaje en Firestore; la confirmación llega via el listener
+    private func persist(_ msg: Message) async {
         do {
-            let docId = try await FirestoreService.shared.saveMessage(msg, uid: uid)
-            // Actualiza el mensaje específico por su UUID local
-            if let idx = messages.firstIndex(where: { $0.id == msg.id }) {
-                messages[idx].firestoreId = docId
-                messages[idx].isConfirmed = true
-            }
+            _ = try await FirestoreService.shared.saveMessage(msg, convId: convId)
         } catch {
             print("[Firestore] Error persistiendo mensaje: \(error)")
+        }
+    }
+
+    /// Muestra el indicador de escritura del destinatario y lo oculta tras 3 segundos de inactividad
+    private func showTypingIndicator() {
+        recipientIsTyping = true
+        typingHideTask?.cancel()
+        typingHideTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            recipientIsTyping = false
         }
     }
 }

@@ -5,7 +5,7 @@ import FirebaseAuth
 // MARK: - Modelo de perfil de usuario
 
 /// Perfil almacenado en Firestore bajo users/{uid}
-struct UserProfile: Identifiable {
+struct UserProfile: Identifiable, Hashable {
     let id: String          // UID de Firebase Auth
     var username: String
     var description: String
@@ -31,11 +31,11 @@ enum AppError: LocalizedError {
 
 // MARK: - FirestoreService
 
-/// Servicio centralizado de acceso a Cloud Firestore
+/// Servicio centralizado de acceso a Cloud Firestore.
 /// Estructura de datos:
-///   users/{uid}                → perfil (username, description, phoneNumber, email, createdAt)
-///   users/{uid}/messages/{id} → mensajes (type, sender, content, mimeType, timestamp)
-///   usernames/{username}       → { uid } para garantizar unicidad
+///   users/{uid}                              → perfil
+///   conversations/{convId}/messages/{id}     → mensajes compartidos (convId = uid1_uid2 ordenados)
+///   usernames/{username}                     → { uid } para garantizar unicidad
 final class FirestoreService {
 
     static let shared = FirestoreService()
@@ -44,7 +44,14 @@ final class FirestoreService {
 
     private init() {
         db = Firestore.firestore()
-        // La persistencia offline está habilitada por defecto en el SDK de iOS
+    }
+
+    // MARK: - Conversación: ID compartido
+
+    /// Genera el ID de conversación deterministico entre dos usuarios.
+    /// El resultado es el mismo sin importar el orden de los UIDs.
+    static func conversationId(myUid: String, recipientUid: String) -> String {
+        [myUid, recipientUid].sorted().joined(separator: "_")
     }
 
     // MARK: - Perfil de usuario
@@ -86,13 +93,11 @@ final class FirestoreService {
         ]
 
         if let old = oldUsername, old != profile.username {
-            // Verifica que el nuevo username esté disponible
             let newRef = db.collection("usernames").document(profile.username)
             let newDoc = try await newRef.getDocument()
             if newDoc.exists {
                 throw AppError.usernameAlreadyTaken
             }
-
             let batch = db.batch()
             batch.deleteDocument(db.collection("usernames").document(old))
             batch.setData(["uid": profile.id], forDocument: newRef)
@@ -103,13 +108,14 @@ final class FirestoreService {
         }
     }
 
-    // MARK: - Mensajes
+    // MARK: - Mensajes de conversación
 
-    /// Persiste un mensaje en la subcolección del usuario y devuelve el ID del documento
-    func saveMessage(_ message: Message, uid: String) async throws -> String {
+    /// Persiste un mensaje en el path compartido de la conversación
+    func saveMessage(_ message: Message, convId: String) async throws -> String {
         var msgData: [String: Any] = [
             "type":      message.type.rawValue,
-            "sender":    message.sender.rawValue,
+            "sender":    message.sender,
+            "recipient": message.recipient,
             "content":   message.content,
             "timestamp": message.timestamp
         ]
@@ -117,27 +123,63 @@ final class FirestoreService {
             msgData["mimeType"] = mimeType
         }
 
-        let ref = try await db.collection("users").document(uid)
+        let ref = try await db
+            .collection("conversations").document(convId)
             .collection("messages").addDocument(data: msgData)
         return ref.documentID
     }
 
-    /// Obtiene los últimos N mensajes ordenados por timestamp.
-    /// Devuelve la lista y un cursor opaco para la siguiente página (paginación hacia atrás).
-    func fetchMessages(uid: String, limit: Int = 50, before: Any? = nil) async throws -> ([Message], Any?) {
-        var query: Query = db.collection("users").document(uid)
+    /// Obtiene los últimos N mensajes de la conversación (paginación hacia atrás).
+    /// Retorna: (mensajes ordenados asc, cursor para página anterior)
+    func fetchMessages(
+        convId: String,
+        currentUid: String,
+        limit: Int = 50,
+        before: QueryDocumentSnapshot? = nil
+    ) async throws -> ([Message], QueryDocumentSnapshot?) {
+        var query: Query = db
+            .collection("conversations").document(convId)
             .collection("messages")
             .order(by: "timestamp", descending: true)
             .limit(to: limit)
 
-        if let cursor = before as? DocumentSnapshot {
+        if let cursor = before {
             query = query.start(afterDocument: cursor)
         }
 
         let snapshot = try await query.getDocuments()
-        let messages = parseMessages(from: snapshot)
-        let lastDoc: Any? = snapshot.documents.last
-        return (messages, lastDoc)
+        let messages = snapshot.documents
+            .compactMap { parseMessage($0, currentUid: currentUid) }
+            .sorted { $0.timestamp < $1.timestamp }
+
+        // Orden descendente: .last = documento más antiguo → cursor para "cargar más"
+        return (messages, snapshot.documents.last)
+    }
+
+    /// Registra un listener en tiempo real para mensajes NUEVOS cuyo timestamp sea
+    /// estrictamente mayor que `afterTimestamp`. Los duplicados se descartan en la capa
+    /// de ViewModel mediante firestoreId.
+    func listenToNewMessages(
+        convId: String,
+        currentUid: String,
+        afterTimestamp: Double,
+        onChange: @escaping ([Message]) -> Void
+    ) -> any ListenerRegistration {
+        let query: Query = db
+            .collection("conversations").document(convId)
+            .collection("messages")
+            .order(by: "timestamp")
+            .whereField("timestamp", isGreaterThan: afterTimestamp)
+
+        return query.addSnapshotListener { snapshot, _ in
+            guard let snapshot else { return }
+            let msgs = snapshot.documentChanges
+                .filter { $0.type == .added }
+                .compactMap { [weak self] change in
+                    self?.parseMessage(change.document, currentUid: currentUid)
+                }
+            if !msgs.isEmpty { onChange(msgs) }
+        }
     }
 
     // MARK: - Directorio
@@ -148,7 +190,7 @@ final class FirestoreService {
         return snapshot.documents.compactMap { userProfile(from: $0) }
     }
 
-    // MARK: - Helpers privados
+    // MARK: - Helpers
 
     private func userProfile(from doc: DocumentSnapshot) -> UserProfile? {
         guard doc.exists, let data = doc.data(),
@@ -163,29 +205,29 @@ final class FirestoreService {
         )
     }
 
-    /// Convierte un QuerySnapshot en un array de Message ordenado por timestamp ascendente
-    private func parseMessages(from snapshot: QuerySnapshot) -> [Message] {
-        snapshot.documents.compactMap { doc -> Message? in
-            let data = doc.data()
-            guard let typeStr    = data["type"]      as? String,
-                  let type       = MessageType(rawValue: typeStr),
-                  let senderStr  = data["sender"]    as? String,
-                  let sender     = MessageSender(rawValue: senderStr),
-                  let content    = data["content"]   as? String,
-                  let timestamp  = data["timestamp"] as? Double
-            else { return nil }
+    /// Convierte un documento de Firestore en un Message.
+    /// `currentUid` se usa para determinar si el mensaje fue enviado por el usuario actual.
+    func parseMessage(_ doc: DocumentSnapshot, currentUid: String) -> Message? {
+        let data = doc.data() ?? [:]
+        guard let typeStr   = data["type"]      as? String,
+              let type      = MessageType(rawValue: typeStr),
+              let sender    = data["sender"]    as? String,
+              let recipient = data["recipient"] as? String,
+              let content   = data["content"]   as? String,
+              let timestamp = data["timestamp"] as? Double
+        else { return nil }
 
-            return Message(
-                id:          UUID(),
-                firestoreId: doc.documentID,
-                type:        type,
-                sender:      sender,
-                content:     content,
-                mimeType:    data["mimeType"] as? String,
-                timestamp:   timestamp,
-                isConfirmed: true
-            )
-        }
-        .sorted { $0.timestamp < $1.timestamp }
+        return Message(
+            id:          UUID(),
+            firestoreId: doc.documentID,
+            type:        type,
+            sender:      sender,
+            recipient:   recipient,
+            content:     content,
+            mimeType:    data["mimeType"] as? String,
+            timestamp:   timestamp,
+            isFromMe:    sender == currentUid,
+            isConfirmed: true
+        )
     }
 }

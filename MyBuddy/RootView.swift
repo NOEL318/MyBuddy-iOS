@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseAuth
 
 /// Vista raíz que decide entre splash, login o la app principal
 /// según el estado de autenticación de Firebase.
@@ -8,8 +9,8 @@ struct RootView: View {
     @State private var selectedTab  = 0
     // Estado de rebote por tab para la animación del tab bar
     @State private var tabBounce = [false, false, false]
-    // Ángulo de rotación del logo en el splash
-    @State private var splashRotation: Double = 0
+    // Escala de pulso del logo en el splash
+    @State private var splashScale: CGFloat = 1.0
 
     var body: some View {
         Group {
@@ -32,17 +33,20 @@ struct RootView: View {
     // Pantalla de carga mientras Firebase resuelve el estado de auth
     private var splashView: some View {
         ZStack {
-            Color.primaryGreen.ignoresSafeArea()
+            LinearGradient(
+                colors: [Color.primaryGreen, Color.actionGreen.opacity(0.9), Color.accentOrange.opacity(0.7)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
             VStack(spacing: 18) {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 72))
-                    .foregroundStyle(.white)
-                    .rotationEffect(.degrees(splashRotation))
+                MyBuddyLogoView(size: 100)
+                    .scaleEffect(splashScale)
                     .onAppear {
                         withAnimation(
-                            .linear(duration: 1.4).repeatForever(autoreverses: false)
+                            .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
                         ) {
-                            splashRotation = 360
+                            splashScale = 1.08
                         }
                     }
                 Text("MyBuddy")
@@ -55,19 +59,19 @@ struct RootView: View {
         }
     }
 
-    // Tab bar principal: Chat | Directorio | Perfil
+    // Tab bar principal: Chats | Directorio | Perfil
     private var mainTabView: some View {
         TabView(selection: $selectedTab) {
-            // ── Chat ──────────────────────────────────────────────────
-            ContentView()
+            // ── Chats ────────────────────────────────────────────────────
+            ChatsListView()
                 .tabItem {
                     Image(systemName: "message.fill")
                         .symbolEffect(.bounce, value: tabBounce[0])
-                    Text("Chat")
+                    Text("Chats")
                 }
                 .tag(0)
 
-            // ── Directorio ───────────────────────────────────────────
+            // ── Directorio ───────────────────────────────────────────────
             DirectoryView()
                 .tabItem {
                     Image(systemName: "person.2.fill")
@@ -76,7 +80,7 @@ struct RootView: View {
                 }
                 .tag(1)
 
-            // ── Perfil ────────────────────────────────────────────────
+            // ── Perfil ────────────────────────────────────────────────────
             ProfileView()
                 .tabItem {
                     Image(systemName: "person.circle.fill")

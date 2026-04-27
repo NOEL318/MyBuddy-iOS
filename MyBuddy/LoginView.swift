@@ -13,7 +13,17 @@ struct LoginView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.primaryGreen.ignoresSafeArea()
+                LinearGradient(
+                    colors: [
+                        Color.primaryGreen,
+                        Color.actionGreen.opacity(0.88),
+                        Color.accentOrange.opacity(0.8),
+                        Color.accentOrange.opacity(0.65)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 0) {
@@ -34,10 +44,8 @@ struct LoginView: View {
 
     // Logo y nombre de la app
     private var logoSection: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "bubble.left.and.bubble.right.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(.white)
+        VStack(spacing: 18) {
+            MyBuddyLogoView(size: 90)
             Text("MyBuddy")
                 .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
@@ -114,7 +122,8 @@ struct LoginView: View {
             .animation(.easeOut(duration: 0.45).delay(0.3), value: appeared)
         }
         .padding(28)
-        .background(.white)
+        .background(Color.white)
+        .colorScheme(.light)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 4)
         .padding(.horizontal, 24)
@@ -130,12 +139,16 @@ struct LoginView: View {
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.actionGreen)
                 .frame(width: 20)
             if isSecure {
                 SecureField(placeholder, text: text)
+                    .foregroundStyle(Color.primary)
+                    .tint(Color.actionGreen)
             } else {
                 TextField(placeholder, text: text)
+                    .foregroundStyle(Color.primary)
+                    .tint(Color.actionGreen)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()

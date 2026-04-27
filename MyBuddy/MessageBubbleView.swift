@@ -139,9 +139,9 @@ struct BubbleShape: Shape {
 
 #Preview {
     VStack(spacing: 8) {
-        MessageBubbleView(message: Message(type: .text, sender: .ios, content: "Hola! Cómo estás?", isConfirmed: true))
-        MessageBubbleView(message: Message(type: .text, sender: .web, content: "Todo bien gracias, y tú?"))
-        MessageBubbleView(message: Message(type: .text, sender: .ios, content: "Enviando…", isConfirmed: false))
+        MessageBubbleView(message: Message(type: .text, sender: "uid_yo", recipient: "uid_otro", content: "Hola! Cómo estás?", isFromMe: true, isConfirmed: true))
+        MessageBubbleView(message: Message(type: .text, sender: "uid_otro", recipient: "uid_yo", content: "Todo bien gracias, y tú?", isFromMe: false))
+        MessageBubbleView(message: Message(type: .text, sender: "uid_yo", recipient: "uid_otro", content: "Enviando…", isFromMe: true, isConfirmed: false))
     }
     .padding()
     .background(Color.chatBg)

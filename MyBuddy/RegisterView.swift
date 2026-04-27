@@ -23,16 +23,29 @@ struct RegisterView: View {
 
     var body: some View {
         ZStack {
-            Color.primaryGreen.ignoresSafeArea()
+            LinearGradient(
+                colors: [
+                    Color.primaryGreen,
+                    Color.actionGreen.opacity(0.88),
+                    Color.accentOrange.opacity(0.8),
+                    Color.accentOrange.opacity(0.65)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 0) {
-                    // Título
-                    Text("Crear cuenta")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.top, 20)
-                        .padding(.bottom, 32)
+                    // Logo y título
+                    VStack(spacing: 14) {
+                        MyBuddyLogoView(size: 72)
+                        Text("Crear cuenta")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
 
                     formCard
                         .padding(.bottom, 40)
@@ -138,7 +151,8 @@ struct RegisterView: View {
             .animation(.easeOut(duration: 0.4).delay(0.42), value: appeared)
         }
         .padding(24)
-        .background(.white)
+        .background(Color.white)
+        .colorScheme(.light)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 4)
         .padding(.horizontal, 24)
@@ -162,8 +176,12 @@ struct RegisterView: View {
                     .frame(width: 20)
                 if isSecure {
                     SecureField(placeholder, text: text)
+                        .foregroundStyle(Color.primary)
+                        .tint(Color.actionGreen)
                 } else {
                     TextField(placeholder, text: text)
+                        .foregroundStyle(Color.primary)
+                        .tint(Color.actionGreen)
                         .keyboardType(isEmail ? .emailAddress : (isPhone ? .phonePad : .default))
                         .textInputAutocapitalization(isEmail || isSecure ? .never : .words)
                         .autocorrectionDisabled(isEmail || isSecure)
