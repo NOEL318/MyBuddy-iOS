@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Perfiles de usuario ─────────────────────────────────────────────────
+    // Cualquier usuario autenticado puede leer perfiles.
+    // Solo el dueño del perfil puede crear o editar el suyo.
+    match /users/{uid} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if false; // No se permite borrar perfiles
+
+      // ── Mensajes del usuario ──────────────────────────────────────────────
+      // Solo el dueño puede leer y escribir sus propios mensajes.
+      match /messages/{msgId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // ── Unicidad de nombres de usuario ──────────────────────────────────────
+    // Cualquier autenticado puede leer para verificar disponibilidad.
+    // Solo puede crear/eliminar el documento quien sea el dueño del UID registrado.
+    match /usernames/{username} {
+      allow read: if request.auth != null;
+
+      // Crear: el campo 'uid' del nuevo documento debe corresponder al usuario actual
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid;
+
+      // Eliminar: solo quien sea el dueño registrado puede liberar su username
+      allow delete: if request.auth != null
+                    && resource.data.uid == request.auth.uid;
+
+      // No se permite actualizar un username ya reservado
+      allow update: if false;
+    }
+  }
+}

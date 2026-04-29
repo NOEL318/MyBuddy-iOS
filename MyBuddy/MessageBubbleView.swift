@@ -4,11 +4,12 @@ struct MessageBubbleView: View {
     let message: Message
 
     private var bubbleColor: Color {
-        message.isFromMe ? Color(red: 0.85, green: 0.99, blue: 0.82) : .white
+        // Verde propio si lo envié yo, blanco si es del otro
+        message.isFromMe ? Color.ownBubble : .white
     }
 
-    // Compone la burbuja alineada a la derecha si es enviada, a la izquierda si es recibida
     var body: some View {
+        // Compone la burbuja alineada a la derecha o izquierda según el remitente
         HStack {
             if message.isFromMe { Spacer(minLength: 60) }
 
@@ -21,18 +22,27 @@ struct MessageBubbleView: View {
                     }
                 }
 
-                Text(message.formattedTime)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
+                HStack(spacing: 4) {
+                    Text(message.formattedTime)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    if message.isFromMe {
+                        Image(systemName: message.isConfirmed ? "checkmark" : "clock")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(message.isConfirmed ? Color.actionGreen : .secondary)
+                            .animation(.easeInOut(duration: 0.2), value: message.isConfirmed)
+                    }
+                }
+                .padding(.horizontal, 4)
             }
 
             if !message.isFromMe { Spacer(minLength: 60) }
         }
     }
 
-    // Muestra el texto del mensaje dentro de una burbuja con forma de cola
     private var textBubble: some View {
+        // Burbuja con el texto del mensaje y forma de cola
         Text(message.content)
             .font(.body)
             .foregroundColor(Color(red: 0.067, green: 0.11, blue: 0.13))
@@ -43,8 +53,8 @@ struct MessageBubbleView: View {
             .shadow(color: .black.opacity(0.06), radius: 1, x: 0, y: 1)
     }
 
-    // Decodifica el base64 del mensaje y muestra la imagen dentro de una burbuja
     private var imageBubble: some View {
+        // Burbuja que decodifica la imagen base64 y muestra un placeholder si falla
         Group {
             if let image = decodedImage {
                 Image(uiImage: image)
@@ -66,8 +76,8 @@ struct MessageBubbleView: View {
         }
     }
 
-    // Intenta decodificar el contenido base64 del mensaje en un UIImage
     private var decodedImage: UIImage? {
+        // Intenta decodificar el base64 del contenido en un UIImage
         guard let data = Data(base64Encoded: message.content) else { return nil }
         return UIImage(data: data)
     }
@@ -77,9 +87,9 @@ struct BubbleShape: Shape {
 
     let isFromMe: Bool
 
-    // Dibuja la forma de la burbuja con una cola en la esquina inferior según el remitente
     func path(in rect: CGRect) -> Path {
-        let radius: CGFloat = 16
+        // Dibuja la burbuja con la cola en la esquina inferior según el remitente
+        let radius:   CGFloat = 16
         let tailSize: CGFloat = 7
 
         var path = Path()
@@ -125,10 +135,10 @@ struct BubbleShape: Shape {
 
 #Preview {
     VStack(spacing: 8) {
-        MessageBubbleView(message: Message(type: .text, sender: .ios, content: "Hola! Cómo estás?"))
-        MessageBubbleView(message: Message(type: .text, sender: .web, content: "Todo bien gracias, y tú?"))
-        MessageBubbleView(message: Message(type: .text, sender: .ios, content: "Excelente! Mira esta foto"))
+        MessageBubbleView(message: Message(type: .text, sender: "uid_yo", recipient: "uid_otro", content: "Hola! Cómo estás?", isFromMe: true, isConfirmed: true))
+        MessageBubbleView(message: Message(type: .text, sender: "uid_otro", recipient: "uid_yo", content: "Todo bien gracias, y tú?", isFromMe: false))
+        MessageBubbleView(message: Message(type: .text, sender: "uid_yo", recipient: "uid_otro", content: "Enviando…", isFromMe: true, isConfirmed: false))
     }
     .padding()
-    .background(Color(red: 0.94, green: 0.92, blue: 0.87))
+    .background(Color.chatBg)
 }

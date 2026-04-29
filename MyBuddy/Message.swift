@@ -3,39 +3,51 @@ import Foundation
 enum MessageType: String, Codable {
     case text
     case image
-    case peerConnected = "peer_connected"
+    case typing
+    case peerConnected    = "peer_connected"
     case peerDisconnected = "peer_disconnected"
     case identify
 }
 
-enum MessageSender: String, Codable {
-    case ios
-    case web
-}
-
 struct Message: Identifiable, Codable, Equatable {
     let id: UUID
+    var firestoreId: String?
     let type: MessageType
-    let sender: MessageSender
+    let sender: String
+    let recipient: String
     let content: String
     let mimeType: String?
     let timestamp: TimeInterval
+    var isFromMe: Bool
+    var isConfirmed: Bool
 
-    // Inicializa un mensaje con UUID y timestamp automáticos si no se proveen
-    init(id: UUID = UUID(), type: MessageType, sender: MessageSender, content: String, mimeType: String? = nil, timestamp: TimeInterval = Date().timeIntervalSince1970 * 1000) {
-        self.id = id
-        self.type = type
-        self.sender = sender
-        self.content = content
-        self.mimeType = mimeType
-        self.timestamp = timestamp
+    init(
+        id:          UUID = UUID(),
+        firestoreId: String? = nil,
+        type:        MessageType,
+        sender:      String,
+        recipient:   String,
+        content:     String,
+        mimeType:    String? = nil,
+        timestamp:   TimeInterval = Date().timeIntervalSince1970 * 1000,
+        isFromMe:    Bool,
+        isConfirmed: Bool = false
+    ) {
+        // Inicializa el mensaje aplicando UUID y timestamp por defecto si no se proveen
+        self.id          = id
+        self.firestoreId = firestoreId
+        self.type        = type
+        self.sender      = sender
+        self.recipient   = recipient
+        self.content     = content
+        self.mimeType    = mimeType
+        self.timestamp   = timestamp
+        self.isFromMe    = isFromMe
+        self.isConfirmed = isConfirmed
     }
 
-    // Retorna true si el mensaje fue enviado desde este dispositivo iOS
-    var isFromMe: Bool { sender == .ios }
-
-    // Retorna la hora del mensaje formateada como HH:MM
     var formattedTime: String {
+        // Devuelve la hora del mensaje formateada como HH:mm
         let date = Date(timeIntervalSince1970: timestamp / 1000)
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
@@ -45,7 +57,9 @@ struct Message: Identifiable, Codable, Equatable {
 
 struct IncomingMessage: Codable {
     let type: MessageType
-    let sender: MessageSender?
+    let from: String?
+    let to: String?
+    let userId: String?
     let content: String?
     let mimeType: String?
     let timestamp: TimeInterval?

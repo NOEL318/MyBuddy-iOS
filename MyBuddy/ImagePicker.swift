@@ -6,8 +6,8 @@ struct ImagePicker: UIViewControllerRepresentable {
     let onImage: (UIImage) -> Void
     @Environment(\.dismiss) private var dismiss
 
-    // Crea y configura el UIImagePickerController con la fuente y el delegado
     func makeUIViewController(context: Context) -> UIImagePickerController {
+        // Crea y configura el UIImagePickerController con la fuente y el delegado
         let picker = UIImagePickerController()
         picker.sourceType = sourceType
         picker.allowsEditing = false
@@ -15,11 +15,12 @@ struct ImagePicker: UIViewControllerRepresentable {
         return picker
     }
 
-    // Requerido por el protocolo, no necesita actualizar el controlador
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {
+        // No requiere actualizaciones tras la creación
+    }
 
-    // Crea el coordinador que recibe los eventos del picker
     func makeCoordinator() -> Coordinator {
+        // Crea el coordinador que recibe los eventos del picker
         Coordinator(parent: self)
     }
 
@@ -27,19 +28,20 @@ struct ImagePicker: UIViewControllerRepresentable {
         let parent: ImagePicker
 
         init(parent: ImagePicker) {
+            // Guarda la referencia al ImagePicker para reenviarle la imagen elegida
             self.parent = parent
         }
 
-        // Entrega la imagen seleccionada al closure y cierra el picker
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            // Entrega la imagen seleccionada al closure y cierra el picker
             if let image = info[.originalImage] as? UIImage {
                 parent.onImage(image)
             }
             parent.dismiss()
         }
 
-        // Cierra el picker cuando el usuario cancela la selección
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            // Cierra el picker cuando el usuario cancela la selección
             parent.dismiss()
         }
     }
