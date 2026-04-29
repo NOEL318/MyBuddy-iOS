@@ -15,12 +15,11 @@ struct ProfileView: View {
     @State private var errorMessage: String = ""
 
     var body: some View {
+        // Compone la pantalla de perfil con avatar, campos editables y cierre de sesión
         NavigationStack {
             ZStack(alignment: .top) {
-                // ── Fondo base ──────────────────────────────────────────────────
                 Color.surface.ignoresSafeArea()
 
-                // ── Degradado verde a naranja que cubre casi toda la pantalla ──
                 LinearGradient(
                     colors: [
                         Color.primaryGreen,
@@ -34,7 +33,6 @@ struct ProfileView: View {
                 )
                 .ignoresSafeArea()
 
-                // ── Contenido scrolleable ───────────────────────────────────────
                 if let profile {
                     ScrollView {
                         VStack(spacing: 20) {
@@ -54,16 +52,15 @@ struct ProfileView: View {
             }
             .navigationTitle("Perfil")
             .navigationBarTitleDisplayMode(.large)
-            .toolbarColorScheme(.dark, for: .navigationBar)   // título blanco sobre el degradado
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar { toolbar }
         }
         .task { await loadProfile() }
     }
 
-    // Avatar circular con inicial + nombre y correo
     private func avatarSection(_ profile: UserProfile) -> some View {
+        // Avatar circular con inicial del username, nombre y correo del usuario
         VStack(spacing: 10) {
-            // Círculo con blur glass detrás del avatar
             ZStack {
                 Circle()
                     .fill(.ultraThinMaterial)
@@ -98,8 +95,8 @@ struct ProfileView: View {
         .padding(.bottom, 8)
     }
 
-    // Tarjeta de campos con fondo blur (vidrio esmerilado)
     private var fieldsSection: some View {
+        // Tarjeta blur con los campos editables del perfil y posible mensaje de error
         VStack(spacing: 0) {
             profileRow(icon: "person.fill",    label: "Usuario",     binding: $username)
             Divider().padding(.leading, 50)
@@ -117,15 +114,14 @@ struct ProfileView: View {
             }
         }
         .padding(.vertical, 8)
-        // Blur glass para la tarjeta de campos
         .background(.regularMaterial)
         .colorScheme(.light)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
     }
 
-    // Fila de campo individual en modo lectura o edición
     private func profileRow(icon: String, label: String, binding: Binding<String>) -> some View {
+        // Fila de campo individual que muestra texto o TextField según el modo edición
         HStack(spacing: 14) {
             Image(systemName: icon)
                 .foregroundStyle(Color.actionGreen)
@@ -154,8 +150,8 @@ struct ProfileView: View {
         .padding(.vertical, 13)
     }
 
-    // Botón de cierre de sesión con fondo blur
     private var logoutButton: some View {
+        // Botón translúcido para cerrar la sesión actual
         Button(role: .destructive) {
             authVM.signOut()
         } label: {
@@ -174,9 +170,9 @@ struct ProfileView: View {
         .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
     }
 
-    // Toolbar con botones Editar / Guardar / Cancelar
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        // Toolbar que alterna entre los botones Editar y Guardar/Cancelar
         ToolbarItem(placement: .navigationBarTrailing) {
             if isEditing {
                 HStack {
@@ -202,8 +198,8 @@ struct ProfileView: View {
         }
     }
 
-    // Carga el perfil desde Firestore al aparecer la vista
     private func loadProfile() async {
+        // Carga el perfil del usuario actual desde Firestore al aparecer la vista
         guard let uid = Auth.auth().currentUser?.uid else { return }
         do {
             if let p = try await FirestoreService.shared.fetchProfile(uid: uid) {
@@ -218,8 +214,8 @@ struct ProfileView: View {
         }
     }
 
-    // Guarda los cambios en Firestore
     private func saveProfile() {
+        // Valida los campos y guarda los cambios del perfil en Firestore
         guard var p = profile else { return }
         let newUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
         guard newUsername.count >= 3 else {

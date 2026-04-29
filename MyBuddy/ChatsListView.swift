@@ -1,7 +1,6 @@
 import SwiftUI
 import FirebaseAuth
 
-/// Lista de contactos disponibles para iniciar una conversación de chat
 struct ChatsListView: View {
 
     @EnvironmentObject var authVM: AuthViewModel
@@ -10,8 +9,8 @@ struct ChatsListView: View {
     @State private var searchText: String = ""
     @State private var appeared:   Bool = false
 
-    // Filtra usuarios según el texto de búsqueda, excluyendo al usuario actual
     private var filteredUsers: [UserProfile] {
+        // Filtra usuarios por texto de búsqueda y excluye al usuario actual
         let others = users.filter { $0.id != authVM.user?.uid }
         guard !searchText.isEmpty else { return others }
         return others.filter {
@@ -21,6 +20,7 @@ struct ChatsListView: View {
     }
 
     var body: some View {
+        // Compone la lista de chats con búsqueda, refresco y navegación al detalle
         NavigationStack {
             ZStack {
                 Color.surface.ignoresSafeArea()
@@ -58,8 +58,8 @@ struct ChatsListView: View {
         }
     }
 
-    // Lista de contactos con entrada escalonada y navegación al chat
     private var contactList: some View {
+        // Lista scrolleable de contactos con animación escalonada
         List {
             ForEach(Array(filteredUsers.enumerated()), id: \.element.id) { index, user in
                 NavigationLink(value: user) {
@@ -75,10 +75,9 @@ struct ChatsListView: View {
         }
     }
 
-    // Fila individual de contacto estilo WhatsApp
     private func contactRow(_ user: UserProfile, index: Int) -> some View {
+        // Construye una fila estilo WhatsApp con avatar, username y email
         HStack(spacing: 14) {
-            // Avatar con inicial del username
             Circle()
                 .fill(avatarColor(for: user.username))
                 .frame(width: 50, height: 50)
@@ -108,8 +107,8 @@ struct ChatsListView: View {
         )
     }
 
-    // Vista de estado vacío cuando no hay contactos o resultados
     private var emptyState: some View {
+        // Vista mostrada cuando no hay contactos o la búsqueda no devuelve resultados
         VStack(spacing: 12) {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 48))
@@ -124,8 +123,8 @@ struct ChatsListView: View {
         .padding(40)
     }
 
-    // Carga todos los usuarios registrados desde Firestore
     private func loadUsers() async {
+        // Descarga todos los usuarios registrados desde Firestore
         isLoading = true
         appeared  = false
         do {
@@ -136,8 +135,8 @@ struct ChatsListView: View {
         isLoading = false
     }
 
-    // Color de avatar determinista basado en el username
     private func avatarColor(for username: String) -> Color {
+        // Asigna un color de avatar determinista a partir del username
         let palette: [Color] = [
             Color.actionGreen,
             Color(red: 0.2,  green: 0.47, blue: 0.78),

@@ -3,13 +3,13 @@ import SwiftUI
 struct MessageBubbleView: View {
     let message: Message
 
-    // Color de fondo según remitente: verde propio, blanco ajeno
     private var bubbleColor: Color {
+        // Verde propio si lo envié yo, blanco si es del otro
         message.isFromMe ? Color.ownBubble : .white
     }
 
-    // Compone la burbuja alineada a la derecha si es enviada, a la izquierda si es recibida
     var body: some View {
+        // Compone la burbuja alineada a la derecha o izquierda según el remitente
         HStack {
             if message.isFromMe { Spacer(minLength: 60) }
 
@@ -22,13 +22,11 @@ struct MessageBubbleView: View {
                     }
                 }
 
-                // Fila de hora + indicador de estado de Firestore
                 HStack(spacing: 4) {
                     Text(message.formattedTime)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
 
-                    // Indicador: reloj gris = pendiente, check verde = confirmado en Firestore
                     if message.isFromMe {
                         Image(systemName: message.isConfirmed ? "checkmark" : "clock")
                             .font(.system(size: 9, weight: .medium))
@@ -43,8 +41,8 @@ struct MessageBubbleView: View {
         }
     }
 
-    // Muestra el texto del mensaje dentro de una burbuja con forma de cola
     private var textBubble: some View {
+        // Burbuja con el texto del mensaje y forma de cola
         Text(message.content)
             .font(.body)
             .foregroundColor(Color(red: 0.067, green: 0.11, blue: 0.13))
@@ -55,8 +53,8 @@ struct MessageBubbleView: View {
             .shadow(color: .black.opacity(0.06), radius: 1, x: 0, y: 1)
     }
 
-    // Decodifica el base64 del mensaje y muestra la imagen dentro de una burbuja
     private var imageBubble: some View {
+        // Burbuja que decodifica la imagen base64 y muestra un placeholder si falla
         Group {
             if let image = decodedImage {
                 Image(uiImage: image)
@@ -78,21 +76,19 @@ struct MessageBubbleView: View {
         }
     }
 
-    // Intenta decodificar el contenido base64 del mensaje en un UIImage
     private var decodedImage: UIImage? {
+        // Intenta decodificar el base64 del contenido en un UIImage
         guard let data = Data(base64Encoded: message.content) else { return nil }
         return UIImage(data: data)
     }
 }
 
-// MARK: - BubbleShape
-
 struct BubbleShape: Shape {
 
     let isFromMe: Bool
 
-    // Dibuja la forma de la burbuja con una cola en la esquina inferior según el remitente
     func path(in rect: CGRect) -> Path {
+        // Dibuja la burbuja con la cola en la esquina inferior según el remitente
         let radius:   CGFloat = 16
         let tailSize: CGFloat = 7
 

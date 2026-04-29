@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var sendButtonScale: CGFloat = 1.0
 
     init(recipient: UserProfile, currentUid: String) {
+        // Crea el ChatViewModel asociado al destinatario y al usuario actual
         self.recipient = recipient
         _viewModel = StateObject(wrappedValue: ChatViewModel(
             recipient:  recipient,
@@ -22,8 +23,8 @@ struct ContentView: View {
     }
 
     var body: some View {
+        // Compone la pantalla de chat con header, mensajes e input bar
         ZStack(alignment: .bottom) {
-            // ── Fondo: textura de chat + degradado verde de arriba hacia abajo ──
             Color.chatBg.ignoresSafeArea()
 
             LinearGradient(
@@ -37,7 +38,6 @@ struct ContentView: View {
             )
             .ignoresSafeArea()
 
-            // ── Contenido principal ──
             VStack(spacing: 0) {
                 headerView
                 messagesView
@@ -60,10 +60,9 @@ struct ContentView: View {
         }
     }
 
-    // Header con avatar e información del destinatario
     private var headerView: some View {
+        // Header con botón de regreso, avatar del destinatario y estado de conexión
         HStack(spacing: 12) {
-            // Botón de regreso
             Button { dismiss() } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 18, weight: .semibold))
@@ -117,6 +116,7 @@ struct ContentView: View {
     }
 
     private var statusColor: Color {
+        // Devuelve el color del punto de presencia según el estado de la conexión
         switch viewModel.connectionState {
         case .peerConnected: return Color(red: 0.56, green: 0.96, blue: 0.74)
         case .disconnected:  return Color(red: 1.0,  green: 0.45, blue: 0.45)
@@ -124,8 +124,8 @@ struct ContentView: View {
         }
     }
 
-    // Lista scrolleable de burbujas con paginación al inicio e indicador de escritura al final
     private var messagesView: some View {
+        // Lista scrolleable con paginación al inicio e indicador de escritura al final
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 4) {
@@ -142,7 +142,6 @@ struct ContentView: View {
                             )
                     }
 
-                    // Indicador de "escribiendo..." del destinatario
                     if viewModel.recipientIsTyping {
                         TypingIndicatorView()
                             .padding(.horizontal, 16)
@@ -175,6 +174,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private func paginationTrigger(proxy: ScrollViewProxy) -> some View {
+        // Dispara la carga de mensajes anteriores cuando aparece el sentinel al hacer scroll arriba
         if viewModel.hasMoreMessages {
             Group {
                 if viewModel.isLoadingMore {
@@ -198,8 +198,8 @@ struct ContentView: View {
         }
     }
 
-    // Barra de entrada con blur translúcido
     private var inputBar: some View {
+        // Barra inferior con botón de imagen, campo de texto y botón de envío
         HStack(spacing: 8) {
             Button {
                 showImageSourceSheet = true
@@ -255,13 +255,11 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Typing Indicator
-
-/// Tres puntos animados estilo burbuja que indican que el destinatario está escribiendo
 struct TypingIndicatorView: View {
     @State private var animating = false
 
     var body: some View {
+        // Tres puntos animados dentro de una burbuja para indicar "escribiendo"
         HStack(spacing: 5) {
             ForEach(0..<3, id: \.self) { i in
                 Circle()

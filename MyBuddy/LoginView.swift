@@ -11,6 +11,7 @@ struct LoginView: View {
     @State private var appeared       = false
 
     var body: some View {
+        // Compone la pantalla de login con degradado, logo y formulario
         NavigationStack {
             ZStack {
                 LinearGradient(
@@ -42,8 +43,8 @@ struct LoginView: View {
         }
     }
 
-    // Logo y nombre de la app
     private var logoSection: some View {
+        // Bloque superior con el logo y el nombre de la app
         VStack(spacing: 18) {
             MyBuddyLogoView(size: 90)
             Text("MyBuddy")
@@ -54,10 +55,9 @@ struct LoginView: View {
         .padding(.bottom, 48)
     }
 
-    // Tarjeta blanca con campos de formulario
     private var formCard: some View {
+        // Tarjeta blanca con email, contraseña, botón de login y enlace a registro
         VStack(spacing: 16) {
-            // Campo de email
             inputField(
                 icon: "envelope",
                 placeholder: "Correo electrónico",
@@ -65,7 +65,6 @@ struct LoginView: View {
                 delay: 0.0
             )
 
-            // Campo de contraseña
             inputField(
                 icon: "lock",
                 placeholder: "Contraseña",
@@ -74,7 +73,6 @@ struct LoginView: View {
                 delay: 0.1
             )
 
-            // Mensaje de error
             if !errorMessage.isEmpty {
                 Text(errorMessage)
                     .font(.caption)
@@ -85,7 +83,6 @@ struct LoginView: View {
                     .transition(.opacity)
             }
 
-            // Botón de inicio de sesión
             Button(action: login) {
                 Group {
                     if isLoading {
@@ -106,7 +103,6 @@ struct LoginView: View {
             .offset(y: appeared ? 0 : 24)
             .animation(.easeOut(duration: 0.45).delay(0.2), value: appeared)
 
-            // Enlace a registro
             Button {
                 showRegister = true
             } label: {
@@ -129,7 +125,6 @@ struct LoginView: View {
         .padding(.horizontal, 24)
     }
 
-    // Campo de texto genérico con ícono y animación escalonada
     private func inputField(
         icon: String,
         placeholder: String,
@@ -137,6 +132,7 @@ struct LoginView: View {
         isSecure: Bool = false,
         delay: Double
     ) -> some View {
+        // Campo de texto reutilizable con ícono y animación de entrada escalonada
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .foregroundStyle(Color.actionGreen)
@@ -163,8 +159,8 @@ struct LoginView: View {
         .animation(.easeOut(duration: 0.45).delay(delay), value: appeared)
     }
 
-    // Intenta iniciar sesión con Firebase Auth
     private func login() {
+        // Valida los campos e intenta iniciar sesión con Firebase Auth
         let emailTrimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !emailTrimmed.isEmpty, !password.isEmpty else {
             errorMessage = "Completa todos los campos."
@@ -182,8 +178,8 @@ struct LoginView: View {
         }
     }
 
-    // Mapea errores de Firebase Auth a mensajes en español
     private func firebaseError(_ error: Error) -> String {
+        // Convierte un error de Firebase Auth en un mensaje legible en español
         let code = AuthErrorCode(rawValue: (error as NSError).code)
         switch code {
         case .invalidEmail:     return "El correo no tiene un formato válido."

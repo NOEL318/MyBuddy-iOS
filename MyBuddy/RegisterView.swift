@@ -15,13 +15,25 @@ struct RegisterView: View {
     @State private var isLoading       = false
     @State private var appeared        = false
 
-    // Validaciones inline en tiempo real
-    private var usernameIsValid:   Bool { username.count >= 3 }
-    private var emailIsValid:      Bool { email.contains("@") && email.contains(".") }
-    private var passwordIsValid:   Bool { password.count >= 6 }
-    private var passwordsMatch:    Bool { password == confirmPassword }
+    private var usernameIsValid: Bool {
+        // Comprueba que el username tenga al menos 3 caracteres
+        username.count >= 3
+    }
+    private var emailIsValid: Bool {
+        // Comprueba que el correo contenga arroba y punto
+        email.contains("@") && email.contains(".")
+    }
+    private var passwordIsValid: Bool {
+        // Comprueba que la contraseña tenga al menos 6 caracteres
+        password.count >= 6
+    }
+    private var passwordsMatch: Bool {
+        // Comprueba que la confirmación coincida con la contraseña
+        password == confirmPassword
+    }
 
     var body: some View {
+        // Compone la pantalla de registro con degradado, logo y formulario
         ZStack {
             LinearGradient(
                 colors: [
@@ -37,7 +49,6 @@ struct RegisterView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    // Logo y título
                     VStack(spacing: 14) {
                         MyBuddyLogoView(size: 72)
                         Text("Crear cuenta")
@@ -70,10 +81,9 @@ struct RegisterView: View {
         }
     }
 
-    // Tarjeta con todos los campos del formulario
     private var formCard: some View {
+        // Tarjeta blanca con todos los campos del formulario y el botón de registro
         VStack(spacing: 14) {
-            // Campos con validación
             validatedField(
                 icon: "person",
                 placeholder: "Nombre de usuario (mín. 3 caracteres)",
@@ -119,7 +129,6 @@ struct RegisterView: View {
                 delay: 0.35
             )
 
-            // Mensaje de error global
             if !errorMessage.isEmpty {
                 Text(errorMessage)
                     .font(.caption)
@@ -129,7 +138,6 @@ struct RegisterView: View {
                     .transition(.opacity)
             }
 
-            // Botón de registro
             Button(action: register) {
                 Group {
                     if isLoading {
@@ -158,7 +166,6 @@ struct RegisterView: View {
         .padding(.horizontal, 24)
     }
 
-    /// Campo de texto con ícono, borde de error y animación de entrada escalonada
     private func validatedField(
         icon: String,
         placeholder: String,
@@ -169,6 +176,7 @@ struct RegisterView: View {
         error: String? = nil,
         delay: Double
     ) -> some View {
+        // Campo de texto con ícono, borde rojo si hay error y animación escalonada
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
@@ -209,8 +217,8 @@ struct RegisterView: View {
         .animation(.easeOut(duration: 0.4).delay(delay), value: appeared)
     }
 
-    // Crea el usuario en Firebase Auth y su perfil en Firestore
     private func register() {
+        // Crea el usuario en Firebase Auth y persiste su perfil en Firestore
         let emailTrimmed    = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let usernameTrimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -234,10 +242,8 @@ struct RegisterView: View {
                     createdAt:   Date()
                 )
                 try await FirestoreService.shared.createProfile(profile)
-                // El AuthViewModel detecta el cambio automáticamente
             } catch {
                 errorMessage = firebaseError(error)
-                // Si Firestore falla después de crear el usuario, borramos el usuario huérfano
                 if (error as? AppError) != nil {
                     try? await Auth.auth().currentUser?.delete()
                 }
@@ -246,8 +252,8 @@ struct RegisterView: View {
         }
     }
 
-    // Mapea errores de Firebase y de la app a mensajes en español
     private func firebaseError(_ error: Error) -> String {
+        // Convierte errores de Firebase Auth o de la app en mensajes en español
         if let appErr = error as? AppError {
             return appErr.localizedDescription
         }

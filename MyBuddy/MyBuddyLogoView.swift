@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// Logo circular de MyBuddy con degradado verde→naranja y el ícono de chat
 struct MyBuddyLogoView: View {
 
     var size: CGFloat = 80
 
     var body: some View {
+        // Compone el logo circular con degradado y el ícono de chat encima
         ZStack {
             Circle()
                 .fill(

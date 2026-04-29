@@ -2,11 +2,8 @@ import Foundation
 import FirebaseFirestore
 import FirebaseAuth
 
-// MARK: - Modelo de perfil de usuario
-
-/// Perfil almacenado en Firestore bajo users/{uid}
 struct UserProfile: Identifiable, Hashable {
-    let id: String          // UID de Firebase Auth
+    let id: String
     var username: String
     var description: String
     var phoneNumber: String
@@ -14,14 +11,12 @@ struct UserProfile: Identifiable, Hashable {
     var createdAt: Date
 }
 
-// MARK: - Errores de la aplicación
-
-/// Errores internos de MyBuddy con mensajes en español
 enum AppError: LocalizedError {
     case usernameAlreadyTaken
     case profileNotFound
 
     var errorDescription: String? {
+        // Devuelve el mensaje en español asociado a cada error
         switch self {
         case .usernameAlreadyTaken: return "Ese nombre de usuario ya está en uso."
         case .profileNotFound:      return "Perfil de usuario no encontrado."
@@ -29,13 +24,6 @@ enum AppError: LocalizedError {
     }
 }
 
-// MARK: - FirestoreService
-
-/// Servicio centralizado de acceso a Cloud Firestore.
-/// Estructura de datos:
-///   users/{uid}                              → perfil
-///   conversations/{convId}/messages/{id}     → mensajes compartidos (convId = uid1_uid2 ordenados)
-///   usernames/{username}                     → { uid } para garantizar unicidad
 final class FirestoreService {
 
     static let shared = FirestoreService()
@@ -43,21 +31,17 @@ final class FirestoreService {
     private let db: Firestore
 
     private init() {
+        // Obtiene la instancia compartida de Firestore
         db = Firestore.firestore()
     }
 
-    // MARK: - Conversación: ID compartido
-
-    /// Genera el ID de conversación deterministico entre dos usuarios.
-    /// El resultado es el mismo sin importar el orden de los UIDs.
     static func conversationId(myUid: String, recipientUid: String) -> String {
+        // Genera un ID determinista para la conversación entre dos usuarios
         [myUid, recipientUid].sorted().joined(separator: "_")
     }
 
-    // MARK: - Perfil de usuario
-
-    /// Crea el perfil en Firestore y reserva el username en un batch atómico
     func createProfile(_ profile: UserProfile) async throws {
+        // Crea el perfil y reserva el username de forma atómica en un batch
         let usernameRef = db.collection("usernames").document(profile.username)
         let usernameDoc = try await usernameRef.getDocument()
         if usernameDoc.exists {
@@ -78,14 +62,14 @@ final class FirestoreService {
         try await batch.commit()
     }
 
-    /// Recupera el perfil completo del usuario dado su UID
     func fetchProfile(uid: String) async throws -> UserProfile? {
+        // Recupera el perfil completo del usuario dado su UID
         let doc = try await db.collection("users").document(uid).getDocument()
         return userProfile(from: doc)
     }
 
-    /// Actualiza los campos editables; si el username cambió, reasigna la clave de unicidad
     func updateProfile(_ profile: UserProfile, oldUsername: String?) async throws {
+        // Actualiza los campos editables y reasigna la reserva si el username cambió
         let data: [String: Any] = [
             "username":    profile.username,
             "description": profile.description,
@@ -108,10 +92,8 @@ final class FirestoreService {
         }
     }
 
-    // MARK: - Mensajes de conversación
-
-    /// Persiste un mensaje en el path compartido de la conversación
     func saveMessage(_ message: Message, convId: String) async throws -> String {
+        // Persiste el mensaje en el path compartido de la conversación
         var msgData: [String: Any] = [
             "type":      message.type.rawValue,
             "sender":    message.sender,
@@ -129,14 +111,13 @@ final class FirestoreService {
         return ref.documentID
     }
 
-    /// Obtiene los últimos N mensajes de la conversación (paginación hacia atrás).
-    /// Retorna: (mensajes ordenados asc, cursor para página anterior)
     func fetchMessages(
         convId: String,
         currentUid: String,
         limit: Int = 50,
         before: QueryDocumentSnapshot? = nil
     ) async throws -> ([Message], QueryDocumentSnapshot?) {
+        // Devuelve la página de mensajes ordenada ascendente y el cursor para paginar atrás
         var query: Query = db
             .collection("conversations").document(convId)
             .collection("messages")
@@ -152,19 +133,16 @@ final class FirestoreService {
             .compactMap { parseMessage($0, currentUid: currentUid) }
             .sorted { $0.timestamp < $1.timestamp }
 
-        // Orden descendente: .last = documento más antiguo → cursor para "cargar más"
         return (messages, snapshot.documents.last)
     }
 
-    /// Registra un listener en tiempo real para mensajes NUEVOS cuyo timestamp sea
-    /// estrictamente mayor que `afterTimestamp`. Los duplicados se descartan en la capa
-    /// de ViewModel mediante firestoreId.
     func listenToNewMessages(
         convId: String,
         currentUid: String,
         afterTimestamp: Double,
         onChange: @escaping ([Message]) -> Void
     ) -> any ListenerRegistration {
+        // Registra un listener en tiempo real para mensajes con timestamp posterior al dado
         let query: Query = db
             .collection("conversations").document(convId)
             .collection("messages")
@@ -182,17 +160,14 @@ final class FirestoreService {
         }
     }
 
-    // MARK: - Directorio
-
-    /// Obtiene la lista de todos los usuarios registrados
     func fetchAllUsers() async throws -> [UserProfile] {
+        // Devuelve la lista de todos los usuarios registrados en Firestore
         let snapshot = try await db.collection("users").getDocuments()
         return snapshot.documents.compactMap { userProfile(from: $0) }
     }
 
-    // MARK: - Helpers
-
     private func userProfile(from doc: DocumentSnapshot) -> UserProfile? {
+        // Convierte un documento de Firestore en un UserProfile o nil si falta el username
         guard doc.exists, let data = doc.data(),
               let username = data["username"] as? String else { return nil }
         return UserProfile(
@@ -205,9 +180,8 @@ final class FirestoreService {
         )
     }
 
-    /// Convierte un documento de Firestore en un Message.
-    /// `currentUid` se usa para determinar si el mensaje fue enviado por el usuario actual.
     func parseMessage(_ doc: DocumentSnapshot, currentUid: String) -> Message? {
+        // Convierte un documento de Firestore en Message marcando si lo envió el usuario actual
         let data = doc.data() ?? [:]
         guard let typeStr   = data["type"]      as? String,
               let type      = MessageType(rawValue: typeStr),

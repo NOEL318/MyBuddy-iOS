@@ -12,6 +12,7 @@ class WebSocketManager {
         case peerConnected
 
         var label: String {
+            // Devuelve la etiqueta legible asociada al estado de conexión
             switch self {
             case .disconnected:  return "Desconectado"
             case .connecting:    return "Conectando..."
@@ -21,12 +22,12 @@ class WebSocketManager {
         }
 
         var isActive: Bool {
+            // Indica si el WebSocket está autenticado y operativo
             self == .connected || self == .peerConnected
         }
     }
 
     var onStateChange: ((ConnectionState) -> Void)?
-    /// Notifica que el destinatario está escribiendo
     var onTyping: (() -> Void)?
 
     private var task: URLSessionWebSocketTask?
@@ -36,22 +37,22 @@ class WebSocketManager {
     private var userId:      String = ""
     private var recipientId: String = ""
 
-    /// Inicia la conexión WebSocket identificándose con el userId dado
     func connect(userId: String, recipientId: String) {
+        // Guarda los identificadores y abre la conexión WebSocket
         self.userId      = userId
         self.recipientId = recipientId
         reconnect()
     }
 
-    /// Cierra la conexión WebSocket
     func disconnect() {
+        // Cierra la conexión y vuelve al estado desconectado
         task?.cancel(with: .normalClosure, reason: nil)
         task = nil
         setState(.disconnected)
     }
 
-    /// Envía un evento de "escribiendo" al destinatario (efímero, no se persiste)
     func sendTyping() {
+        // Envía un evento efímero de "escribiendo" al destinatario
         struct TypingMsg: Encodable {
             let type = "typing"
             let from: String
@@ -62,14 +63,14 @@ class WebSocketManager {
         task?.send(.string(text)) { _ in }
     }
 
-    // Actualiza el estado de conexión y notifica al ViewModel vía callback
     private func setState(_ newState: ConnectionState) {
+        // Actualiza el estado interno y notifica al ViewModel vía callback
         state = newState
         onStateChange?(newState)
     }
 
-    /// Crea la tarea WebSocket y comienza la conexión
     private func reconnect() {
+        // Crea una nueva tarea WebSocket, se identifica y arranca el loop de recepción
         guard let url = URL(string: SERVER_URL) else { return }
         setState(.connecting)
         task = session.webSocketTask(with: url)
@@ -78,8 +79,8 @@ class WebSocketManager {
         receiveLoop()
     }
 
-    /// Envía el mensaje de identificación con el userId del usuario actual
     private func identify() {
+        // Envía el mensaje de identificación con el userId actual
         struct IdentifyMsg: Encodable { let type = "identify"; let userId: String }
         guard let data = try? JSONEncoder().encode(IdentifyMsg(userId: userId)),
               let text = String(data: data, encoding: .utf8) else { return }
@@ -91,8 +92,8 @@ class WebSocketManager {
         }
     }
 
-    /// Escucha mensajes entrantes en loop; reconecta automáticamente si se pierde la conexión
     private func receiveLoop() {
+        // Escucha mensajes en bucle y reconecta automáticamente al perder la conexión
         task?.receive { [weak self] result in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -115,8 +116,8 @@ class WebSocketManager {
         }
     }
 
-    /// Parsea el JSON recibido: maneja estado de peers y eventos de typing
     private func handleRawMessage(_ text: String) {
+        // Parsea el JSON entrante y dispara los eventos de presencia y typing
         guard let data = text.data(using: .utf8),
               let incoming = try? JSONDecoder().decode(IncomingMessage.self, from: data) else { return }
 
@@ -126,7 +127,6 @@ class WebSocketManager {
         case .peerDisconnected:
             if incoming.userId == recipientId { setState(.connected) }
         case .typing:
-            // Solo notifica si el evento viene de nuestro destinatario
             guard incoming.from == recipientId else { return }
             onTyping?()
         default:

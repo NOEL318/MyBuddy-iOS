@@ -1,18 +1,15 @@
 import SwiftUI
 import FirebaseAuth
 
-/// Vista raíz que decide entre splash, login o la app principal
-/// según el estado de autenticación de Firebase.
 struct RootView: View {
 
     @StateObject private var authVM = AuthViewModel()
     @State private var selectedTab  = 0
-    // Estado de rebote por tab para la animación del tab bar
     @State private var tabBounce = [false, false, false]
-    // Escala de pulso del logo en el splash
     @State private var splashScale: CGFloat = 1.0
 
     var body: some View {
+        // Decide entre splash, login o el tab principal según el estado de auth
         Group {
             if authVM.isLoading {
                 splashView
@@ -30,8 +27,8 @@ struct RootView: View {
         .environmentObject(authVM)
     }
 
-    // Pantalla de carga mientras Firebase resuelve el estado de auth
     private var splashView: some View {
+        // Pantalla de carga con logo pulsante mientras Firebase resuelve la sesión
         ZStack {
             LinearGradient(
                 colors: [Color.primaryGreen, Color.actionGreen.opacity(0.9), Color.accentOrange.opacity(0.7)],
@@ -59,10 +56,9 @@ struct RootView: View {
         }
     }
 
-    // Tab bar principal: Chats | Directorio | Perfil
     private var mainTabView: some View {
+        // Tab bar principal con Chats, Directorio y Perfil
         TabView(selection: $selectedTab) {
-            // ── Chats ────────────────────────────────────────────────────
             ChatsListView()
                 .tabItem {
                     Image(systemName: "message.fill")
@@ -71,7 +67,6 @@ struct RootView: View {
                 }
                 .tag(0)
 
-            // ── Directorio ───────────────────────────────────────────────
             DirectoryView()
                 .tabItem {
                     Image(systemName: "person.2.fill")
@@ -80,7 +75,6 @@ struct RootView: View {
                 }
                 .tag(1)
 
-            // ── Perfil ────────────────────────────────────────────────────
             ProfileView()
                 .tabItem {
                     Image(systemName: "person.circle.fill")
@@ -91,7 +85,6 @@ struct RootView: View {
         }
         .tint(Color.primaryGreen)
         .onChange(of: selectedTab) { _, newTab in
-            // Dispara la animación de rebote en el ícono del tab seleccionado
             tabBounce[newTab].toggle()
         }
     }

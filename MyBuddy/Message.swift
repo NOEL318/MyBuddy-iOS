@@ -11,22 +11,16 @@ enum MessageType: String, Codable {
 
 struct Message: Identifiable, Codable, Equatable {
     let id: UUID
-    /// ID del documento en Firestore; nil hasta que el mensaje se confirma
     var firestoreId: String?
     let type: MessageType
-    /// UID de Firebase del remitente
     let sender: String
-    /// UID de Firebase del destinatario
     let recipient: String
     let content: String
     let mimeType: String?
     let timestamp: TimeInterval
-    /// true cuando el mensaje fue enviado por el usuario actual
     var isFromMe: Bool
-    /// true cuando el mensaje fue persistido exitosamente en Firestore
     var isConfirmed: Bool
 
-    // Inicializa un mensaje con UUID y timestamp automáticos si no se proveen
     init(
         id:          UUID = UUID(),
         firestoreId: String? = nil,
@@ -39,6 +33,7 @@ struct Message: Identifiable, Codable, Equatable {
         isFromMe:    Bool,
         isConfirmed: Bool = false
     ) {
+        // Inicializa el mensaje aplicando UUID y timestamp por defecto si no se proveen
         self.id          = id
         self.firestoreId = firestoreId
         self.type        = type
@@ -51,8 +46,8 @@ struct Message: Identifiable, Codable, Equatable {
         self.isConfirmed = isConfirmed
     }
 
-    // Retorna la hora del mensaje formateada como HH:MM
     var formattedTime: String {
+        // Devuelve la hora del mensaje formateada como HH:mm
         let date = Date(timeIntervalSince1970: timestamp / 1000)
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
@@ -62,11 +57,8 @@ struct Message: Identifiable, Codable, Equatable {
 
 struct IncomingMessage: Codable {
     let type: MessageType
-    /// UID del remitente (mensajes de texto/imagen/typing)
     let from: String?
-    /// UID del destinatario
     let to: String?
-    /// UID del peer que se conectó o desconectó
     let userId: String?
     let content: String?
     let mimeType: String?

@@ -11,7 +11,6 @@ class ChatViewModel: ObservableObject {
     @Published var connectionState:   WebSocketManager.ConnectionState = .disconnected
     @Published var isLoadingMore:     Bool = false
     @Published var hasMoreMessages:   Bool = false
-    /// true cuando el destinatario está escribiendo
     @Published var recipientIsTyping: Bool = false
 
     let recipient: UserProfile
@@ -23,10 +22,10 @@ class ChatViewModel: ObservableObject {
     private var typingHideTask:    Task<Void, Never>?          = nil
     private var lastTypingSent:    Date                        = .distantPast
     private var paginationCursor:  QueryDocumentSnapshot?      = nil
-    /// Timestamp del mensaje más reciente ya cargado; el listener sólo entrega mensajes posteriores
     private var listenerTimestamp: Double                      = 0
 
     init(recipient: UserProfile, currentUid: String) {
+        // Configura los IDs de la conversación, los callbacks del WebSocket y carga el historial
         self.recipient  = recipient
         self.currentUid = currentUid
         self.convId     = FirestoreService.conversationId(myUid: currentUid, recipientUid: recipient.id)
@@ -34,7 +33,6 @@ class ChatViewModel: ObservableObject {
         wsManager.onStateChange = { [weak self] state in
             self?.connectionState = state
         }
-        // Solo usamos WebSocket para el indicador de escritura
         wsManager.onTyping = { [weak self] in
             self?.showTypingIndicator()
         }
@@ -42,25 +40,21 @@ class ChatViewModel: ObservableObject {
         Task { await loadInitialMessages() }
     }
 
-    // MARK: - Conexión
-
-    /// Inicia la conexión WebSocket (para typing) y el listener de Firestore (para mensajes)
     func connect() {
+        // Abre la conexión WebSocket usada para el indicador de escritura
         wsManager.connect(userId: currentUid, recipientId: recipient.id)
     }
 
-    /// Cancela la conexión WebSocket y el listener de Firestore
     func disconnect() {
+        // Cancela el WebSocket, el listener de Firestore y el task del indicador
         wsManager.disconnect()
         messagesListener?.remove()
         messagesListener = nil
         typingHideTask?.cancel()
     }
 
-    // MARK: - Envío de mensajes
-
-    /// Persiste el mensaje en Firestore; el listener lo añade a la UI automáticamente
     func sendText(_ text: String) {
+        // Construye un mensaje de texto y lo persiste en Firestore
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let msg = Message(
@@ -73,11 +67,8 @@ class ChatViewModel: ObservableObject {
         Task { await persist(msg) }
     }
 
-    /// Redimensiona, comprime y persiste la imagen en Firestore.
-    /// Firestore tiene un límite de 1 MB por documento; el base64 añade ~33% de overhead,
-    /// por lo que el JPEG bruto debe quedar bajo 700 KB para garantizar la escritura.
     func sendImage(_ image: UIImage) {
-        // 1. Redimensionar al lado más largo en 800 px como máximo
+        // Redimensiona, comprime a menos de 700 KB y persiste la imagen en Firestore como base64
         let maxDimension: CGFloat = 800
         let scale = min(maxDimension / max(image.size.width, image.size.height), 1.0)
         let targetSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
@@ -86,7 +77,6 @@ class ChatViewModel: ObservableObject {
             image.draw(in: CGRect(origin: .zero, size: targetSize))
         }
 
-        // 2. Comprimir con calidad decreciente hasta caber en 700 KB
         var quality: CGFloat = 0.65
         var data: Data?
         repeat {
@@ -108,20 +98,16 @@ class ChatViewModel: ObservableObject {
         Task { await persist(msg) }
     }
 
-    // MARK: - Typing indicator
-
-    /// Envía un evento de "escribiendo" via WebSocket (máximo 1 vez cada 1.5 s)
     func userDidType() {
+        // Envía un evento de "escribiendo" como máximo una vez cada 1.5 segundos
         let now = Date()
         guard now.timeIntervalSince(lastTypingSent) > 1.5 else { return }
         lastTypingSent = now
         wsManager.sendTyping()
     }
 
-    // MARK: - Paginación
-
-    /// Carga la página anterior de mensajes (llamado al hacer scroll al inicio)
     func loadMoreMessages() async {
+        // Carga la página anterior de mensajes y la antepone al historial actual
         guard !isLoadingMore, hasMoreMessages else { return }
         isLoadingMore = true
         do {
@@ -146,10 +132,8 @@ class ChatViewModel: ObservableObject {
         isLoadingMore = false
     }
 
-    // MARK: - Privados
-
-    /// Carga el historial inicial y arranca el listener para mensajes nuevos en tiempo real
     private func loadInitialMessages() async {
+        // Carga los últimos 50 mensajes y arranca el listener para los nuevos
         do {
             let (loaded, pagCursor) = try await FirestoreService.shared.fetchMessages(
                 convId: convId, currentUid: currentUid, limit: 50
@@ -165,8 +149,8 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    /// Registra el listener de Firestore filtrando por timestamp para no re-entregar historial
     private func startRealtimeListener() {
+        // Registra el listener de Firestore filtrando por timestamp para no recibir el historial
         messagesListener = FirestoreService.shared.listenToNewMessages(
             convId:         convId,
             currentUid:     currentUid,
@@ -178,8 +162,8 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    /// Integra los mensajes recibidos del listener, evitando duplicados por firestoreId
     private func applyIncomingMessages(_ incoming: [Message]) {
+        // Inserta los mensajes nuevos descartando los que ya estén por firestoreId
         var changed = false
         for msg in incoming {
             guard let fid = msg.firestoreId,
@@ -192,8 +176,8 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    /// Persiste el mensaje en Firestore; la confirmación llega via el listener
     private func persist(_ msg: Message) async {
+        // Escribe el mensaje en Firestore; el listener lo añadirá a la UI
         do {
             _ = try await FirestoreService.shared.saveMessage(msg, convId: convId)
         } catch {
@@ -201,8 +185,8 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    /// Muestra el indicador de escritura del destinatario y lo oculta tras 3 segundos de inactividad
     private func showTypingIndicator() {
+        // Muestra el indicador de escritura y lo oculta tras 3 segundos sin actividad
         recipientIsTyping = true
         typingHideTask?.cancel()
         typingHideTask = Task { @MainActor in

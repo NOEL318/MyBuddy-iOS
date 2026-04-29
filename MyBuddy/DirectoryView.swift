@@ -7,8 +7,8 @@ struct DirectoryView: View {
     @State private var isLoading:  Bool = true
     @State private var appeared:   Bool = false
 
-    // Filtra usuarios según el texto de búsqueda
     private var filteredUsers: [UserProfile] {
+        // Filtra usuarios por username o descripción según el texto de búsqueda
         guard !searchText.isEmpty else { return users }
         return users.filter {
             $0.username.localizedCaseInsensitiveContains(searchText) ||
@@ -17,6 +17,7 @@ struct DirectoryView: View {
     }
 
     var body: some View {
+        // Compone el directorio con búsqueda, refresco y navegación al detalle
         NavigationStack {
             ZStack {
                 Color.surface.ignoresSafeArea()
@@ -49,8 +50,8 @@ struct DirectoryView: View {
         }
     }
 
-    // Lista de usuarios con entrada escalonada y navegación a detalle de contacto
     private var userList: some View {
+        // Lista scrolleable con animación escalonada y navegación a ContactDetailView
         List {
             ForEach(Array(filteredUsers.enumerated()), id: \.element.id) { index, user in
                 NavigationLink(destination: ContactDetailView(user: user)) {
@@ -66,10 +67,9 @@ struct DirectoryView: View {
         }
     }
 
-    // Fila individual estilo WhatsApp
     private func userRow(_ user: UserProfile, index: Int) -> some View {
+        // Construye una fila estilo WhatsApp con avatar, username y descripción
         HStack(spacing: 14) {
-            // Avatar con inicial del username
             Circle()
                 .fill(avatarColor(for: user.username))
                 .frame(width: 50, height: 50)
@@ -101,8 +101,8 @@ struct DirectoryView: View {
         )
     }
 
-    // Vista de estado vacío cuando no hay resultados
     private var emptyState: some View {
+        // Vista mostrada cuando no hay usuarios o la búsqueda está vacía de resultados
         VStack(spacing: 12) {
             Image(systemName: "person.2.slash")
                 .font(.system(size: 48))
@@ -117,8 +117,8 @@ struct DirectoryView: View {
         .padding(40)
     }
 
-    // Carga todos los usuarios desde Firestore
     private func loadUsers() async {
+        // Descarga todos los usuarios registrados desde Firestore
         isLoading = true
         appeared  = false
         do {
@@ -129,8 +129,8 @@ struct DirectoryView: View {
         isLoading = false
     }
 
-    // Color de avatar determinista basado en el username
     private func avatarColor(for username: String) -> Color {
+        // Asigna un color de avatar determinista a partir del username
         let palette: [Color] = [
             Color.actionGreen,
             Color(red: 0.2,  green: 0.47, blue: 0.78),

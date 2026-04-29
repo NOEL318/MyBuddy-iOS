@@ -1,24 +1,17 @@
-//
-//  MyBuddyApp.swift
-//  MyBuddy
-//
-//  Created by Noel Rincón on 10/04/26.
-//
-
 import SwiftUI
 import FirebaseCore
 
 @main
 struct MyBuddyApp: App {
 
-    // Inicializa Firebase al arrancar la app antes de que se cree la primera vista
     init() {
+        // Configura Firebase antes de instanciar la primera vista
         FirebaseApp.configure()
     }
 
     var body: some Scene {
+        // Define la escena principal que monta RootView
         WindowGroup {
-            // RootView decide entre splash, login y la app según el estado de auth
             RootView()
         }
     }

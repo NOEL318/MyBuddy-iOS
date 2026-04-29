@@ -1,17 +1,16 @@
 import SwiftUI
 import FirebaseAuth
 
-/// Vista de detalle de un contacto del directorio, con opción de iniciar chat
 struct ContactDetailView: View {
 
     let user: UserProfile
     @EnvironmentObject var authVM: AuthViewModel
 
     var body: some View {
+        // Compone el detalle del contacto sobre un degradado y permite iniciar chat
         ZStack(alignment: .top) {
             Color.surface.ignoresSafeArea()
 
-            // Degradado verde → naranja (mitad de pantalla)
             LinearGradient(
                 colors: [
                     Color.primaryGreen,
@@ -42,8 +41,8 @@ struct ContactDetailView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
     }
 
-    // Avatar grande con inicial y nombre
     private var avatarSection: some View {
+        // Avatar grande con inicial del username y datos básicos del contacto
         VStack(spacing: 10) {
             Circle()
                 .fill(
@@ -72,8 +71,8 @@ struct ContactDetailView: View {
         .padding(.bottom, 4)
     }
 
-    // Tarjeta de información del contacto
     private var infoCard: some View {
+        // Tarjeta translúcida con la descripción, email y teléfono del contacto
         VStack(spacing: 0) {
             if !user.description.isEmpty {
                 infoRow(icon: "text.alignleft", label: "Descripción", value: user.description)
@@ -93,6 +92,7 @@ struct ContactDetailView: View {
     }
 
     private func infoRow(icon: String, label: String, value: String) -> some View {
+        // Fila genérica de información con ícono, etiqueta y valor
         HStack(spacing: 14) {
             Image(systemName: icon)
                 .foregroundStyle(Color.actionGreen)
@@ -111,9 +111,9 @@ struct ContactDetailView: View {
         .padding(.vertical, 13)
     }
 
-    // Botón para iniciar la conversación de chat
     @ViewBuilder
     private func chatButton(currentUid: String) -> some View {
+        // Botón que navega a la pantalla de conversación con este contacto
         NavigationLink(destination: ContentView(recipient: user, currentUid: currentUid)) {
             HStack(spacing: 10) {
                 Image(systemName: "message.fill")
