@@ -97,7 +97,3 @@ El servidor WebSocket no almacena nada: solo enruta eventos `identify`, `typing`
 - Xcode 15 o superior
 - iOS 17 o superior
 - Cuenta de Firebase con plan Spark (suficiente para desarrollo)
-
-## Estado
-
-Proyecto personal en desarrollo activo. La rama `newUI` contiene la versión actual con la interfaz renovada.
